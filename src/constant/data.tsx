@@ -47,7 +47,7 @@ export const menuOptions = [
   },
   {
     id: 3,
-    name: 'No Background',
+    name: 'Color',
     icon: <NoBackgroundIcon />,
   },
   {
@@ -59,5 +59,10 @@ export const menuOptions = [
     id: 5,
     name: 'Enhance',
     icon: <RestyleIcon />,
+  },
+  {
+    id: 6,
+    name: 'Quality',
+    icon: <PhotoIcon />,
   },
 ];
