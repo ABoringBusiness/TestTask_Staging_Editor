@@ -52,7 +52,7 @@ export const menuOptions = [
   },
   {
     id: 4,
-    name: '3D Photo',
+    name: 'Face Swap',
     icon: <PhotoIcon />,
   },
   {

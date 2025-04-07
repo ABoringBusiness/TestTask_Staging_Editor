@@ -1,23 +1,25 @@
 import BottomSheet from '@gorhom/bottom-sheet';
-import { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
-import { useTheme } from '@rneui/themed';
-import React, { useEffect, useRef, useState } from 'react';
+import {BottomSheetMethods} from '@gorhom/bottom-sheet/lib/typescript/types';
+import {useTheme} from '@rneui/themed';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   FlatList,
   Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { deployRoomRedesign } from '../api/api.tsx';
+import {GestureHandlerRootView} from 'react-native-gesture-handler';
+import {
+  deployRoomRedesign,
+  deployRoomRepaint,
+  deployRoomReStyle,
+} from '../api/api.tsx';
 import CommonBottomSheet from '../component/ui/CommonBottomSheet.tsx';
 import FirstCarousel from '../component/ui/FirstCarousel.tsx';
 import Header from '../component/ui/Header.tsx';
@@ -25,8 +27,9 @@ import MenuOptionsList from '../component/ui/MenuOptionList.tsx';
 import OptionList from '../component/ui/OptionList.tsx';
 import QualityBottomSheet from '../component/ui/QualityBottomSheet.tsx';
 import ResizeBottomSheet from '../component/ui/ResizeBottomSheet.tsx';
-import { menuOptions, optionImages } from '../constant/data.tsx';
-import { MainStackScreenProps } from '../types/navigation.types.ts';
+import {menuOptions, optionImages} from '../constant/data.tsx';
+import {MainStackScreenProps} from '../types/navigation.types.ts';
+import {styles} from './styles.ts';
 import {
   ColorData,
   colorHeaderOption,
@@ -35,14 +38,6 @@ import {
   resizeData,
   ReStyleOption,
 } from './utils.ts';
-// import { Styley } from '@styley/typescript-sdk';
-
-// Constants extraction
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const NUM_COLUMNS = 4;
-const ITEM_SPACING = 8;
-const ITEM_SIZE =
-  (SCREEN_WIDTH - ITEM_SPACING * (NUM_COLUMNS + 1)) / NUM_COLUMNS;
 
 interface HomeScreenProps extends MainStackScreenProps<'Home'> {}
 
@@ -51,10 +46,14 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
   const [selectedImage, setSelectedImage] = useState<string>('');
   const [selectedId, setSelectedId] = useState<number | null>(1);
   const [loading, setLoading] = useState(true);
+  const [loadingRestyle, setLoadingRestyle] = useState(false);
+  const [loadingRePaint, setLoadingRePaint] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [result, setResult] = useState<string[] | null>(null);
   const [prompt, setPrompt] = useState<string>('');
-  // const styley = new Styley();
+  const [selectedStyle, setSelectedStyle] = useState<string>('');
+  const [selectedSpace, setSelectedSpace] = useState<string>('');
+  const [selectedColor, setSelectedColor] = useState<string>('');
   // Refs
   const flatListRef = useRef<FlatList<string> | null>(null);
   const bottomSheetRefs: {
@@ -73,7 +72,6 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
 
   const {theme} = useTheme();
   const themedStyles = styles(theme);
-
   // API Call
   const fetchInitialData = async () => {
     try {
@@ -84,6 +82,7 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
         setLoading(true);
       } else if (response.status === 'complete') {
         setLoading(false);
+        setIsEdit(false);
         if (response.job.files) {
           setResult(response.job.files);
           setSelectedImage(response.job.files[0]);
@@ -101,6 +100,67 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
     fetchInitialData();
   }, []);
 
+  const handleRoomReStyle = async () => {
+    try {
+      setLoadingRestyle(true);
+
+      console.log(selectedSpace, selectedStyle);
+      const response = await deployRoomReStyle({
+        'Space Name': selectedSpace,
+        'Space Style': selectedStyle,
+      });
+
+      if (response.status === 'pending') {
+        handleRoomReStyle();
+        return;
+      }
+
+      if (response.status === 'complete') {
+        setLoadingRestyle(false);
+        setIsEdit(false);
+        closeBottomSheet(bottomSheetRefs.reStyle);
+        if (response.job.files) {
+          setLoadingRestyle(false);
+          setResult(response.job.files);
+          setSelectedImage(response.job.files[0]);
+        }
+      }
+    } catch (error) {
+      setLoadingRestyle(false);
+      console.error('Failed to restyle room:', error);
+    }
+  };
+
+  const handleRePaint = async () => {
+    try {
+      setLoadingRePaint(true);
+
+      console.log(selectedColor);
+      const response = await deployRoomRepaint({
+        Color: selectedColor,
+      });
+
+      if (response.status === 'pending') {
+        handleRePaint();
+        return;
+      }
+
+      if (response.status === 'complete') {
+        setLoadingRePaint(false);
+        setIsEdit(false);
+        closeBottomSheet(bottomSheetRefs.color);
+        if (response.job.files) {
+          setLoadingRestyle(false);
+          setResult(response.job.files);
+          setSelectedImage(response.job.files[0]);
+        }
+      }
+    } catch (error) {
+      setLoadingRePaint(false);
+      console.error('Failed to restyle room:', error);
+    }
+  };
+
   const handleResizeSelect = (item: any) => {
     // Handle resize selection logic
     console.log('Selected Resize:', item);
@@ -114,6 +174,7 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
   const closeBottomSheet = (ref: React.RefObject<BottomSheet>) => {
     if (ref.current) {
       ref.current.close();
+      setSelectedId(null);
     }
   };
 
@@ -221,16 +282,34 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
         {selectedId === 2 && (
           <CommonBottomSheet
             ref={bottomSheetRefs.reStyle}
-            title="Re Style"
+            title="Room ReStyle"
             subtitle="Pick a Style to Transfer"
             data={FaceArray}
             headerData={ReStyleOption}
+            loading={loadingRestyle}
             onClose={() => closeBottomSheet(bottomSheetRefs.reStyle)}
-            renderItemContent={item => (
-              <TouchableOpacity style={themedStyles.imageView}>
-                <Image source={item?.path} style={themedStyles.imageStyle} />
-              </TouchableOpacity>
-            )}
+            onPress={() => handleRoomReStyle()}
+            renderItemContent={item => {
+              const isSelected =
+                selectedStyle === item.spaceStyle &&
+                selectedSpace === item.spaceName;
+              return (
+                <TouchableOpacity
+                  style={[themedStyles.imageView]}
+                  onPress={() => {
+                    setSelectedStyle(item.spaceStyle);
+                    setSelectedSpace(item.spaceName);
+                  }}>
+                  <Image
+                    source={item?.path}
+                    style={[
+                      themedStyles.imageStyle,
+                      isSelected && themedStyles.selectedBorder,
+                    ]}
+                  />
+                </TouchableOpacity>
+              );
+            }}
             theme={theme}
           />
         )}
@@ -241,13 +320,27 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
             data={ColorData}
             headerData={colorHeaderOption}
             onClose={() => closeBottomSheet(bottomSheetRefs.color)}
-            renderItemContent={item => (
-              <TouchableOpacity style={themedStyles.imageView}>
-                <View
-                  style={[themedStyles.imageView, {backgroundColor: item}]}
-                />
-              </TouchableOpacity>
-            )}
+            onPress={() => handleRePaint()}
+            loading={loadingRePaint}
+            renderItemContent={item => {
+              const isSelected = selectedColor === item?.id;
+              return (
+                <TouchableOpacity
+                  style={[
+                    themedStyles.imageView,
+                    isSelected && themedStyles.selectedBorder,
+                  ]}
+                  onPress={() => setSelectedColor(item?.id)}>
+                  <View
+                    style={[
+                      themedStyles.imageView,
+                      {backgroundColor: item?.color},
+                      isSelected && themedStyles.selectedBorder,
+                    ]}
+                  />
+                </TouchableOpacity>
+              );
+            }}
             theme={theme}
           />
         )}
@@ -289,167 +382,5 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
     </GestureHandlerRootView>
   );
 };
-
-const styles = (theme: any) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: 'white',
-    },
-    scrollView: {
-      marginTop: 20,
-    },
-    indicator: {
-      flex: 1,
-      height: '100%',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    selectedImage: {
-      width: '100%',
-      height: 300,
-      borderRadius: 5,
-      marginTop: 10,
-    },
-    editWithTextView: {
-      height: 40,
-      backgroundColor: 'black',
-      borderRadius: 10,
-      alignItems: 'center',
-      paddingHorizontal: 10,
-      marginHorizontal: 20,
-      marginTop: 10,
-      justifyContent: 'center',
-    },
-    textInputView: {
-      // marginHorizontal: 20,
-      paddingVertical: 5,
-      paddingHorizontal: 15,
-      flexDirection: 'row',
-      alignItems: 'center',
-      // backgroundColor: 'rgb(255, 255, 255)'
-    },
-    editText: {
-      color: 'white',
-      marginHorizontal: 10,
-      fontSize: 16,
-      fontWeight: 700,
-    },
-    iconContainer: {
-      position: 'absolute',
-      bottom: 0,
-      right: 10,
-      left: 10,
-      height: 50,
-      alignItems: 'center',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
-    iconWrapper: {
-      backgroundColor: '#b8ac9c',
-      height: 40,
-      width: 40,
-      borderRadius: 10,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    iconMessageWrapper: {
-      backgroundColor: '#000000',
-      height: 35,
-      width: 35,
-      borderRadius: 10,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginLeft: 10,
-    },
-    icon: {
-      width: 30,
-      height: 30,
-      borderRadius: 5,
-    },
-    messageIcon: {
-      width: 20,
-      height: 20,
-      borderRadius: 5,
-    },
-    contentContainer: {
-      flex: 1,
-    },
-    bottomHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginHorizontal: 10,
-    },
-    reStyleText: {
-      textAlign: 'center',
-      fontSize: 20,
-      fontWeight: '800',
-    },
-    pickColorText: {
-      textAlign: 'center',
-      fontSize: 16,
-      fontWeight: '800',
-    },
-    reStyleSubtitle: {
-      paddingTop: 4,
-      color: theme.COLORS.GRAY,
-      fontWeight: '800',
-    },
-    optionView: {
-      marginHorizontal: 10,
-      marginTop: 15,
-    },
-    colorOptionHeader: {
-      marginHorizontal: 30,
-      marginTop: 15,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    optionText: {
-      fontFamily: theme.fontFamily.InterBold,
-      fontWeight: '800',
-    },
-    imageStyle: {
-      height: 90,
-      width: ITEM_SIZE,
-      borderRadius: 10,
-    },
-    imageView: {
-      height: 90,
-      width: ITEM_SIZE,
-      borderRadius: 10,
-    },
-    buttonView: {
-      position: 'absolute',
-      backgroundColor: theme.COLORS.PRIMARY,
-      right: 0,
-      left: 0,
-      bottom: 15,
-      height: 45,
-      marginHorizontal: 70,
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 1,
-      borderRadius: 6,
-    },
-    buttonText: {
-      color: theme.COLORS.WHITE,
-    },
-    flatContainer: {
-      paddingHorizontal: ITEM_SPACING,
-      paddingVertical: ITEM_SPACING,
-      gap: ITEM_SPACING,
-      paddingBottom: 70,
-    },
-    input: {
-      fontSize: 16,
-      fontFamily: theme.fontFamily.InterBold,
-      backgroundColor: 'lightgray',
-      paddingVertical: 12,
-      paddingHorizontal: 15,
-      borderRadius: 5,
-      flex: 1,
-    },
-  });
 
 export default HomeScreen;

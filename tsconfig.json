@@ -1,9 +1,10 @@
 {
   "extends": "@react-native/typescript-config/tsconfig.json",
   "compilerOptions": {
-    "jsx": "react-native"
-  },
-  "paths": {
+    "jsx": "react-native",
+    "noImplicitAny": false,
+    "paths": {
       "@env": ["node_modules/react-native-dotenv"]
     }
+  }
 }

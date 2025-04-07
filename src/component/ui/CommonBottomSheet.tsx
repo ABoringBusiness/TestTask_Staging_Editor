@@ -1,13 +1,14 @@
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
-import React, { JSX, useState } from 'react';
+import BottomSheet, {BottomSheetView} from '@gorhom/bottom-sheet';
+import {BottomSheetMethods} from '@gorhom/bottom-sheet/lib/typescript/types';
+import React, {JSX, useState} from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -28,6 +29,8 @@ interface BottomSheetContentProps {
   onClose: () => void;
   renderItemContent: (item: any) => JSX.Element;
   theme: any;
+  onPress?: () => void;
+  loading?: boolean;
 }
 
 const CommonBottomSheet: React.FC<BottomSheetContentProps> = ({
@@ -39,6 +42,8 @@ const CommonBottomSheet: React.FC<BottomSheetContentProps> = ({
   onClose,
   renderItemContent,
   theme,
+  onPress,
+  loading,
 }) => {
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(1);
   const themedStyles = styles(theme);
@@ -106,9 +111,13 @@ const CommonBottomSheet: React.FC<BottomSheetContentProps> = ({
         </View>
 
         {/* Add Your Own Button */}
-        <View style={themedStyles.buttonView}>
-          <Text style={themedStyles.buttonText}>Add Your Own</Text>
-        </View>
+        <TouchableOpacity style={themedStyles.buttonView} onPress={onPress}>
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <Text style={themedStyles.buttonText}>Add Your Own</Text>
+          )}
+        </TouchableOpacity>
       </BottomSheetView>
     </BottomSheet>
   );
@@ -150,7 +159,7 @@ const styles = (theme: any) =>
       paddingVertical: ITEM_SPACING,
       gap: ITEM_SPACING,
       paddingBottom: 70,
-      flexGrow : 1,
+      flexGrow: 1,
     },
     flatContentContainer: {
       gap: 70,
