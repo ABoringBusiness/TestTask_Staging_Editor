@@ -1,6 +1,6 @@
 import BottomSheet, {BottomSheetView} from '@gorhom/bottom-sheet';
 import {BottomSheetMethods} from '@gorhom/bottom-sheet/lib/typescript/types';
-import React, {JSX, useState} from 'react';
+import React, {JSX, useState, useCallback, useMemo} from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -20,6 +20,13 @@ const ITEM_SPACING = 8;
 const ITEM_SIZE =
   (SCREEN_WIDTH - ITEM_SPACING * (NUM_COLUMNS + 1)) / NUM_COLUMNS;
 
+// Colors
+const COLORS = {
+  BLACK: '#000000',
+  WHITE: '#FFFFFF',
+  GRAY: '#B8B8B8',
+};
+
 interface BottomSheetContentProps {
   ref: React.RefObject<BottomSheetMethods>;
   title: string;
@@ -33,6 +40,9 @@ interface BottomSheetContentProps {
   loading?: boolean;
 }
 
+/**
+ * A reusable bottom sheet component for displaying grid items with header options
+ */
 const CommonBottomSheet: React.FC<BottomSheetContentProps> = ({
   ref,
   title,
@@ -46,8 +56,44 @@ const CommonBottomSheet: React.FC<BottomSheetContentProps> = ({
   loading,
 }) => {
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(1);
-  const themedStyles = styles(theme);
-  console.log(data);
+  const themedStyles = useMemo(() => styles(theme), [theme]);
+  
+  // Memoized column wrapper style
+  const columnWrapperStyle = useMemo(() => ({
+    gap: ITEM_SPACING,
+  }), []);
+  
+  // Memoized option text style generator
+  const getOptionTextStyle = useCallback((isSelected: boolean) => {
+    return {
+      ...themedStyles.optionText,
+      color: isSelected ? COLORS.BLACK : COLORS.GRAY,
+    };
+  }, [themedStyles.optionText]);
+  
+  // Memoized render function for header options
+  const renderHeaderOption = useCallback(({item}: {item: any}) => {
+    const isSelected = selectedOptionId === item?.id;
+    return (
+      <TouchableOpacity
+        key={item?.id}
+        onPress={() => setSelectedOptionId(item?.id)}>
+        <Text style={getOptionTextStyle(isSelected)}>
+          {item?.name}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [selectedOptionId, getOptionTextStyle]);
+  
+  // Memoized render function for main content items
+  const renderItem = useCallback(({item}: {item: any}) => {
+    return renderItemContent(item);
+  }, [renderItemContent]);
+  
+  // Memoized key extractor
+  const keyExtractor = useCallback((item: any) => 
+    item?.id?.toString() || Math.random().toString(), []);
+  
   return (
     <BottomSheet
       ref={ref}
@@ -76,23 +122,8 @@ const CommonBottomSheet: React.FC<BottomSheetContentProps> = ({
               data={headerData}
               horizontal
               contentContainerStyle={themedStyles.flatContentContainer}
-              renderItem={({item}) => {
-                const isSelected = selectedOptionId === item?.id;
-                return (
-                  <TouchableOpacity
-                    key={item?.id}
-                    onPress={() => setSelectedOptionId(item?.id)}>
-                    <Text
-                      style={[
-                        themedStyles.optionText,
-                        // eslint-disable-next-line react-native/no-inline-styles
-                        {color: isSelected ? '#000000' : '#B8B8B8'},
-                      ]}>
-                      {item?.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              }}
+              renderItem={renderHeaderOption}
+              keyExtractor={keyExtractor}
             />
           </View>
         )}
@@ -103,17 +134,17 @@ const CommonBottomSheet: React.FC<BottomSheetContentProps> = ({
             data={data}
             scrollEnabled={true}
             numColumns={NUM_COLUMNS}
-            columnWrapperStyle={{gap: ITEM_SPACING}}
-            // showsVerticalScrollIndicator={false}
+            columnWrapperStyle={columnWrapperStyle}
             contentContainerStyle={themedStyles.flatContainer}
-            renderItem={({item}) => renderItemContent(item)}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
           />
         </View>
 
         {/* Add Your Own Button */}
         <TouchableOpacity style={themedStyles.buttonView} onPress={onPress}>
           {loading ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <ActivityIndicator color={COLORS.WHITE} size="small" />
           ) : (
             <Text style={themedStyles.buttonText}>Add Your Own</Text>
           )}
@@ -125,7 +156,6 @@ const CommonBottomSheet: React.FC<BottomSheetContentProps> = ({
 
 const styles = (theme: any) =>
   StyleSheet.create({
-    // ... (copy the relevant styles from the original component)
     contentContainer: {
       flex: 1,
     },
@@ -141,7 +171,7 @@ const styles = (theme: any) =>
     },
     reStyleSubtitle: {
       paddingTop: 4,
-      color: '#B8B8B8',
+      color: COLORS.GRAY,
       fontWeight: '800',
     },
     colorOptionHeader: {
@@ -191,8 +221,8 @@ const styles = (theme: any) =>
       borderRadius: 6,
     },
     buttonText: {
-      color: '#FFFFFF',
+      color: COLORS.WHITE,
     },
   });
 
-export default CommonBottomSheet;
+export default React.memo(CommonBottomSheet);
