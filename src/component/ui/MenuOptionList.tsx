@@ -20,7 +20,6 @@ const MenuOptionsList: React.FC<MenuOptionsListProps> = ({
 }) => {
   const menuOptionRenderItem = ({
     item,
-    index,
   }: {
     item: {id: number; name: string; icon: React.ReactNode};
     index: number;

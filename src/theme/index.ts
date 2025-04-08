@@ -128,6 +128,8 @@ const SPACING = {
 const COLORS = {
   PRIMARY: '#160E25',
   SECONDARY: '#570AB5',
+  GRAY: '#B8B8B8',
+  WHITE: '#FFFFFF',
 };
 export const theme = createTheme({
   mode: 'light',

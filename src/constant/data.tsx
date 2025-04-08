@@ -47,17 +47,22 @@ export const menuOptions = [
   },
   {
     id: 3,
-    name: 'No Background',
+    name: 'Color',
     icon: <NoBackgroundIcon />,
   },
   {
     id: 4,
-    name: '3D Photo',
+    name: 'Face Swap',
     icon: <PhotoIcon />,
   },
   {
     id: 5,
     name: 'Enhance',
     icon: <RestyleIcon />,
+  },
+  {
+    id: 6,
+    name: 'Quality',
+    icon: <PhotoIcon />,
   },
 ];

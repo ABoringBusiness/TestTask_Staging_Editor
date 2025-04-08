@@ -1,12 +1,12 @@
 import React from 'react';
-import {View, Image, Text} from 'react-native';
+import {View, Image, Text, Platform} from 'react-native';
 
 const Header = () => {
   return (
     <View
       style={{
         height: 60,
-        marginTop: 60,
+        marginTop: Platform.OS === 'ios' ? 60 : 0,
         backgroundColor: '#fff',
         borderBottomColor: 'lightgray',
         borderBottomWidth: 1,
