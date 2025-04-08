@@ -1,9 +1,10 @@
 import BottomSheet from '@gorhom/bottom-sheet';
 import {BottomSheetMethods} from '@gorhom/bottom-sheet/lib/typescript/types';
 import {useTheme} from '@rneui/themed';
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -28,6 +29,7 @@ import OptionList from '../component/ui/OptionList.tsx';
 import QualityBottomSheet from '../component/ui/QualityBottomSheet.tsx';
 import ResizeBottomSheet from '../component/ui/ResizeBottomSheet.tsx';
 import {menuOptions, optionImages} from '../constant/data.tsx';
+import useApiCall from '../hooks/useApiCall.ts';
 import {MainStackScreenProps} from '../types/navigation.types.ts';
 import {styles} from './styles.ts';
 import {
@@ -45,15 +47,12 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
   // State management
   const [selectedImage, setSelectedImage] = useState<string>('');
   const [selectedId, setSelectedId] = useState<number | null>(1);
-  const [loading, setLoading] = useState(true);
-  const [loadingRestyle, setLoadingRestyle] = useState(false);
-  const [loadingRePaint, setLoadingRePaint] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
-  const [result, setResult] = useState<string[] | null>(null);
   const [prompt, setPrompt] = useState<string>('');
   const [selectedStyle, setSelectedStyle] = useState<string>('');
   const [selectedSpace, setSelectedSpace] = useState<string>('');
   const [selectedColor, setSelectedColor] = useState<string>('');
+  
   // Refs
   const flatListRef = useRef<FlatList<string> | null>(null);
   const bottomSheetRefs: {
@@ -72,117 +71,118 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
 
   const {theme} = useTheme();
   const themedStyles = styles(theme);
-  // API Call
-  const fetchInitialData = async () => {
-    try {
-      setLoading(true);
-      const response = await deployRoomRedesign(prompt);
-      if (response.status === 'pending') {
-        fetchInitialData();
-        setLoading(true);
-      } else if (response.status === 'complete') {
-        setLoading(false);
-        setIsEdit(false);
-        if (response.job.files) {
-          setResult(response.job.files);
-          setSelectedImage(response.job.files[0]);
-          setPrompt('');
-        }
+  
+  // API hooks
+  const {
+    loading,
+    resultFiles: result,
+    execute: executeRoomRedesign,
+    error: redesignError,
+  } = useApiCall(deployRoomRedesign, {
+    onSuccess: (response) => {
+      setIsEdit(false);
+      if (response.job?.files?.length > 0) {
+        setSelectedImage(response.job.files[0]);
+        setPrompt('');
       }
-      console.log('response************', response);
-    } catch (error) {
-      setLoading(false);
-      console.error('Failed to fetch initial data:', error);
+    },
+    onError: (error) => {
+      Alert.alert('Error', error.message || 'Failed to redesign room');
+    },
+    autoExecute: true,
+  });
+
+  const {
+    loading: loadingRestyle,
+    resultFiles: restyleFiles,
+    execute: executeRoomRestyle,
+    error: restyleError,
+  } = useApiCall(deployRoomReStyle, {
+    onSuccess: (response) => {
+      setIsEdit(false);
+      closeBottomSheet(bottomSheetRefs.reStyle);
+      if (response.job?.files?.length > 0) {
+        setSelectedImage(response.job.files[0]);
+      }
+    },
+    onError: (error) => {
+      Alert.alert('Error', error.message || 'Failed to restyle room');
+    },
+  });
+
+  const {
+    loading: loadingRePaint,
+    resultFiles: repaintFiles,
+    execute: executeRoomRepaint,
+    error: repaintError,
+  } = useApiCall(deployRoomRepaint, {
+    onSuccess: (response) => {
+      setIsEdit(false);
+      closeBottomSheet(bottomSheetRefs.color);
+      if (response.job?.files?.length > 0) {
+        setSelectedImage(response.job.files[0]);
+      }
+    },
+    onError: (error) => {
+      Alert.alert('Error', error.message || 'Failed to repaint room');
+    },
+  });
+
+  // Update result files when any API call returns new files
+  useEffect(() => {
+    if (restyleFiles) {
+      setResult(restyleFiles);
     }
-  };
+  }, [restyleFiles]);
 
   useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  const handleRoomReStyle = async () => {
-    try {
-      setLoadingRestyle(true);
-
-      console.log(selectedSpace, selectedStyle);
-      const response = await deployRoomReStyle({
-        'Space Name': selectedSpace,
-        'Space Style': selectedStyle,
-      });
-
-      if (response.status === 'pending') {
-        handleRoomReStyle();
-        return;
-      }
-
-      if (response.status === 'complete') {
-        setLoadingRestyle(false);
-        setIsEdit(false);
-        closeBottomSheet(bottomSheetRefs.reStyle);
-        if (response.job.files) {
-          setLoadingRestyle(false);
-          setResult(response.job.files);
-          setSelectedImage(response.job.files[0]);
-        }
-      }
-    } catch (error) {
-      setLoadingRestyle(false);
-      console.error('Failed to restyle room:', error);
+    if (repaintFiles) {
+      setResult(repaintFiles);
     }
-  };
+  }, [repaintFiles]);
 
-  const handleRePaint = async () => {
-    try {
-      setLoadingRePaint(true);
+  // Handle room redesign
+  const handleRoomRedesign = useCallback(() => {
+    executeRoomRedesign(prompt);
+  }, [executeRoomRedesign, prompt]);
 
-      console.log(selectedColor);
-      const response = await deployRoomRepaint({
-        Color: selectedColor,
-      });
+  // Handle room restyle
+  const handleRoomReStyle = useCallback(() => {
+    executeRoomRestyle({
+      'Space Name': selectedSpace,
+      'Space Style': selectedStyle,
+    });
+  }, [executeRoomRestyle, selectedSpace, selectedStyle]);
 
-      if (response.status === 'pending') {
-        handleRePaint();
-        return;
-      }
+  // Handle room repaint
+  const handleRePaint = useCallback(() => {
+    executeRoomRepaint({
+      Color: selectedColor,
+    });
+  }, [executeRoomRepaint, selectedColor]);
 
-      if (response.status === 'complete') {
-        setLoadingRePaint(false);
-        setIsEdit(false);
-        closeBottomSheet(bottomSheetRefs.color);
-        if (response.job.files) {
-          setLoadingRestyle(false);
-          setResult(response.job.files);
-          setSelectedImage(response.job.files[0]);
-        }
-      }
-    } catch (error) {
-      setLoadingRePaint(false);
-      console.error('Failed to restyle room:', error);
-    }
-  };
-
-  const handleResizeSelect = (item: any) => {
+  const handleResizeSelect = useCallback((item: any) => {
     // Handle resize selection logic
     console.log('Selected Resize:', item);
-  };
+  }, []);
 
-  const handleQualitySelect = (quality: any) => {
+  const handleQualitySelect = useCallback((quality: any) => {
     // Handle quality selection logic
     console.log('Selected Quality:', quality);
-  };
+  }, []);
 
-  const closeBottomSheet = (ref: React.RefObject<BottomSheet>) => {
+  const closeBottomSheet = useCallback((ref: React.RefObject<BottomSheet>) => {
     if (ref.current) {
       ref.current.close();
       setSelectedId(null);
     }
-  };
+  }, []);
 
   return (
     <GestureHandlerRootView style={themedStyles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS == 'ios' ? 5 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 5 : 0}
         style={{flex: 1}}
         enabled>
         <View style={themedStyles.container}>
@@ -233,19 +233,18 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
               </View>
 
               {/* Edit Button */}
-
               {isEdit ? (
-                <View style={[themedStyles.textInputView]}>
+                <View style={themedStyles.textInputView}>
                   <TextInput
                     placeholder="Write a room prompt "
                     value={prompt}
                     onChangeText={setPrompt}
                     style={themedStyles.input}
-                    autoFocus={true} // Ensure it opens automatically
+                    autoFocus={true}
                   />
 
                   <TouchableOpacity
-                    onPress={() => fetchInitialData()}
+                    onPress={handleRoomRedesign}
                     style={themedStyles.iconMessageWrapper}>
                     {loading ? (
                       <ActivityIndicator color={'#ffffff'} size={'small'} />
@@ -288,14 +287,14 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
             headerData={ReStyleOption}
             loading={loadingRestyle}
             onClose={() => closeBottomSheet(bottomSheetRefs.reStyle)}
-            onPress={() => handleRoomReStyle()}
+            onPress={handleRoomReStyle}
             renderItemContent={item => {
               const isSelected =
                 selectedStyle === item.spaceStyle &&
                 selectedSpace === item.spaceName;
               return (
                 <TouchableOpacity
-                  style={[themedStyles.imageView]}
+                  style={themedStyles.imageView}
                   onPress={() => {
                     setSelectedStyle(item.spaceStyle);
                     setSelectedSpace(item.spaceName);
@@ -320,7 +319,7 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
             data={ColorData}
             headerData={colorHeaderOption}
             onClose={() => closeBottomSheet(bottomSheetRefs.color)}
-            onPress={() => handleRePaint()}
+            onPress={handleRePaint}
             loading={loadingRePaint}
             renderItemContent={item => {
               const isSelected = selectedColor === item?.id;

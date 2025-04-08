@@ -157,7 +157,7 @@ export const ColorData = [
     color: '#00FF62',
   },
   {
-    id: 'cyan',
+    id: 'teal',
     color: '#00FFF6',
   },
   {
