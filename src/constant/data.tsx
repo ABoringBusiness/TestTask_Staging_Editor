@@ -57,12 +57,22 @@ export const menuOptions = [
   },
   {
     id: 5,
-    name: 'Enhance',
+    name: 'ReSize',
     icon: <RestyleIcon />,
   },
   {
     id: 6,
     name: 'Quality',
+    icon: <PhotoIcon />,
+  },
+  {
+    id: 7,
+    name: '3D Photo',
+    icon: <PhotoIcon />,
+  },
+  {
+    id: 8,
+    name: 'Background Remove',
     icon: <PhotoIcon />,
   },
 ];

@@ -6254,6 +6254,11 @@ react-native-gesture-handler@^2.24.0:
     hoist-non-react-statics "^3.3.0"
     invariant "^2.2.4"
 
+react-native-image-picker@^8.2.0:
+  version "8.2.0"
+  resolved "https://registry.yarnpkg.com/react-native-image-picker/-/react-native-image-picker-8.2.0.tgz#d8656fdd1a0f1ad262c9c129d4f75900b685e56e"
+  integrity sha512-jIGllQJuJIn0YKss/JEeb0Kos1HSsnIpU+i3bYxR27sOxSyDZQyP9dKR22olssQPlfH+rGNR/Jc6xKRkhm48vw==
+
 react-native-iphone-x-helper@^1.0.3:
   version "1.3.1"
   resolved "https://registry.yarnpkg.com/react-native-iphone-x-helper/-/react-native-iphone-x-helper-1.3.1.tgz#20c603e9a0e765fd6f97396638bdeb0e5a60b010"
@@ -6336,6 +6341,11 @@ react-native-vector-icons@^10.2.0:
   dependencies:
     prop-types "^15.7.2"
     yargs "^16.1.1"
+
+react-native-video@^6.12.0:
+  version "6.12.0"
+  resolved "https://registry.yarnpkg.com/react-native-video/-/react-native-video-6.12.0.tgz#f65285f1da063869dd332dbb34f8b64a247d3fb5"
+  integrity sha512-MPiOk/8qszBY2zAZZuuzyNPcRK6+UFHutzRcEJlGodZ5GCUNmw1vIE6FCInL22S/YpnGywwiKVQDQCjjqQx9Fg==
 
 react-native@0.78.0:
   version "0.78.0"

@@ -1,9 +1,10 @@
 import BottomSheet from '@gorhom/bottom-sheet';
 import {BottomSheetMethods} from '@gorhom/bottom-sheet/lib/typescript/types';
 import {useTheme} from '@rneui/themed';
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -16,9 +17,12 @@ import {
 } from 'react-native';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {
+  deployRemoveBackground,
   deployRoomRedesign,
   deployRoomRepaint,
   deployRoomReStyle,
+  deployThreeDPhoto,
+  faceSwap,
 } from '../api/api.tsx';
 import CommonBottomSheet from '../component/ui/CommonBottomSheet.tsx';
 import FirstCarousel from '../component/ui/FirstCarousel.tsx';
@@ -37,23 +41,50 @@ import {
   faceHeaderOption,
   resizeData,
   ReStyleOption,
+  RoomArray,
+  threeDPhoto,
+  videoArray,
 } from './utils.ts';
+import FirstCarouselVideo from '../component/ui/FirstCarouselVideo.tsx';
+import Video, {VideoRef} from 'react-native-video';
+import {launchImageLibrary} from 'react-native-image-picker';
+import AntDesign from 'react-native-vector-icons/AntDesign';
 
 interface HomeScreenProps extends MainStackScreenProps<'Home'> {}
+
+// Define types for API responses
+interface ApiResponse {
+  status: 'pending' | 'complete' | string;
+  job?: {
+    files?: string[];
+  };
+}
 
 const HomeScreen: React.FC<HomeScreenProps> = () => {
   // State management
   const [selectedImage, setSelectedImage] = useState<string>('');
-  const [selectedId, setSelectedId] = useState<number | null>(1);
+  const [selectedVideo, setSelectedVideo] = useState<string>('');
+  const [selectedId, setSelectedId] = useState<number | null>(0);
   const [loading, setLoading] = useState(true);
   const [loadingRestyle, setLoadingRestyle] = useState(false);
   const [loadingRePaint, setLoadingRePaint] = useState(false);
+  const [loadingFace, setLoadingFace] = useState(false);
+  const [loadingPhoto, setLoadingPhoto] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [result, setResult] = useState<string[] | null>(null);
+  const [resultVideo, setResultVideo] = useState<string[] | null>(null);
   const [prompt, setPrompt] = useState<string>('');
   const [selectedStyle, setSelectedStyle] = useState<string>('');
   const [selectedSpace, setSelectedSpace] = useState<string>('');
   const [selectedColor, setSelectedColor] = useState<string>('');
+  const [selectedFace, setSelectedFace] = useState<string>('');
+  const [selectedFaceId, setSelectedFaceId] = useState<string>('');
+  const [selectedPhoto, setSelectedPhoto] = useState<string>('');
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string>('');
+  const [video, setVideo] = useState<string>('');
+
+  console.log('selectedId', selectedId);
+  const videoRef = useRef<VideoRef>(null);
   // Refs
   const flatListRef = useRef<FlatList<string> | null>(null);
   const bottomSheetRefs: {
@@ -62,104 +93,164 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
     face: React.RefObject<BottomSheetMethods>;
     quality: React.RefObject<BottomSheetMethods>;
     resize: React.RefObject<BottomSheetMethods>;
+    photo: React.RefObject<BottomSheetMethods>;
   } = {
     reStyle: useRef<BottomSheetMethods>(null!),
     color: useRef<BottomSheetMethods>(null!),
     face: useRef<BottomSheetMethods>(null!),
     quality: useRef<BottomSheetMethods>(null!),
     resize: useRef<BottomSheetMethods>(null!),
+    photo: useRef<BottomSheetMethods>(null!),
   };
 
   const {theme} = useTheme();
   const themedStyles = styles(theme);
-  // API Call
-  const fetchInitialData = async () => {
-    try {
-      setLoading(true);
-      const response = await deployRoomRedesign(prompt);
-      if (response.status === 'pending') {
-        fetchInitialData();
-        setLoading(true);
-      } else if (response.status === 'complete') {
-        setLoading(false);
-        setIsEdit(false);
-        if (response.job.files) {
-          setResult(response.job.files);
-          setSelectedImage(response.job.files[0]);
-          setPrompt('');
+
+  const pollApiEndpoint = useCallback(
+    async (
+      apiCall: () => Promise<ApiResponse>,
+      onComplete: (files: string[]) => void,
+      setLoadingState: React.Dispatch<React.SetStateAction<boolean>>,
+      bottomSheetRef?: React.RefObject<BottomSheetMethods>,
+    ) => {
+      try {
+        setLoadingState(true);
+        const response = await apiCall();
+
+        if (response.status === 'pending') {
+          // Retry with exponential backoff could be implemented here
+          setTimeout(
+            () =>
+              pollApiEndpoint(
+                apiCall,
+                onComplete,
+                setLoadingState,
+                bottomSheetRef,
+              ),
+            1000,
+          );
+          return;
         }
+
+        if (response.status === 'complete' && response.job?.files) {
+          setLoadingState(false);
+          setIsEdit(false);
+          if (bottomSheetRef) closeBottomSheet(bottomSheetRef);
+          onComplete(response.job.files);
+        }
+      } catch (error) {
+        setLoadingState(false);
+        console.error('Error in API polling:', error);
       }
-      console.log('response************', response);
-    } catch (error) {
-      setLoading(false);
-      console.error('Failed to fetch initial data:', error);
-    }
-  };
+    },
+    [],
+  );
+
+  const fetchInitialData = useCallback(async () => {
+    pollApiEndpoint(
+      () => deployRoomRedesign(prompt),
+      files => {
+        setResult(files);
+        setSelectedImage(files[0]);
+        setPrompt('');
+      },
+      setLoading,
+    );
+  }, [prompt, pollApiEndpoint]);
 
   useEffect(() => {
     fetchInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleRoomReStyle = async () => {
-    try {
-      setLoadingRestyle(true);
+  const handleRoomReStyle = useCallback(async () => {
+    pollApiEndpoint(
+      () =>
+        deployRoomReStyle({
+          'Space Name': selectedSpace,
+          'Space Style': selectedStyle,
+        }),
+      files => {
+        setResult(files);
+        setSelectedImage(files[0]);
+      },
+      setLoadingRestyle,
+      bottomSheetRefs.reStyle,
+    );
+  }, [selectedSpace, selectedStyle, pollApiEndpoint, bottomSheetRefs?.reStyle]);
 
-      console.log(selectedSpace, selectedStyle);
-      const response = await deployRoomReStyle({
-        'Space Name': selectedSpace,
-        'Space Style': selectedStyle,
-      });
+  const handleRePaint = useCallback(async () => {
+    pollApiEndpoint(
+      () => deployRoomRepaint({Color: selectedColor}),
+      files => {
+        setResult(files);
+        setSelectedImage(files[0]);
+      },
+      setLoadingRePaint,
+      bottomSheetRefs.color,
+    );
+  }, [selectedColor, pollApiEndpoint, bottomSheetRefs?.color]);
 
-      if (response.status === 'pending') {
-        handleRoomReStyle();
-        return;
-      }
+  const handleFaceSwap = useCallback(async () => {
+    console.log('selectedFace', selectedFace);
+    pollApiEndpoint(
+      () =>
+        faceSwap({swap_image: selectedFace}).catch(() =>
+          Alert.alert('Billing required'),
+        ),
+      files => {
+        setResult(files);
+        setSelectedImage(files[0]);
+      },
+      setLoadingFace,
+      bottomSheetRefs.face,
+    );
+  }, [pollApiEndpoint, bottomSheetRefs?.face, selectedFace]);
 
-      if (response.status === 'complete') {
-        setLoadingRestyle(false);
-        setIsEdit(false);
-        closeBottomSheet(bottomSheetRefs.reStyle);
-        if (response.job.files) {
-          setLoadingRestyle(false);
-          setResult(response.job.files);
-          setSelectedImage(response.job.files[0]);
-        }
-      }
-    } catch (error) {
-      setLoadingRestyle(false);
-      console.error('Failed to restyle room:', error);
+  const handleThreeDPhoto = useCallback(async () => {
+    pollApiEndpoint(
+      () => deployThreeDPhoto({Image: selectedPhoto}),
+      files => {
+        console.log('files', files);
+        setResultVideo(files);
+        setSelectedVideo(files[0]);
+        setResult(null);
+        setSelectedImage('');
+      },
+      setLoadingPhoto,
+      bottomSheetRefs.photo,
+    );
+  }, [pollApiEndpoint, bottomSheetRefs?.photo, selectedPhoto]);
+
+  const handleRemoveBackground = useCallback(async () => {
+    console.log('Hello')
+    if (!selectedVideo) {
+      console.log('No video selected');
+      Alert.alert('Error', 'Please select a video first');
+      return;
     }
-  };
-
-  const handleRePaint = async () => {
-    try {
-      setLoadingRePaint(true);
-
-      console.log(selectedColor);
-      const response = await deployRoomRepaint({
-        Color: selectedColor,
-      });
-
-      if (response.status === 'pending') {
-        handleRePaint();
-        return;
-      }
-
-      if (response.status === 'complete') {
-        setLoadingRePaint(false);
-        setIsEdit(false);
-        closeBottomSheet(bottomSheetRefs.color);
-        if (response.job.files) {
-          setLoadingRestyle(false);
-          setResult(response.job.files);
-          setSelectedImage(response.job.files[0]);
-        }
-      }
-    } catch (error) {
-      setLoadingRePaint(false);
-      console.error('Failed to restyle room:', error);
-    }
-  };
+  
+    pollApiEndpoint(
+      () => 
+        deployRemoveBackground({input_video: selectedVideo})
+          .catch(err => {
+            console.log('API Error:', err?.response || err);
+            Alert.alert(
+              'Error',
+              'Failed to remove background. Please try again.'
+            );
+            throw err; // Re-throw to stop the polling
+          }),
+      files => {
+        console.log('Background removed successfully:', files);
+        setResultVideo(files);
+        setSelectedVideo(files[0]);
+        setResult(null);
+        setSelectedImage('');
+      },
+      setLoadingPhoto,
+    );
+  }, [pollApiEndpoint, selectedVideo]);
 
   const handleResizeSelect = (item: any) => {
     // Handle resize selection logic
@@ -178,12 +269,37 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
     }
   };
 
+  const pickVideo = () => {
+    launchImageLibrary(
+      {
+        mediaType: 'video',
+        selectionLimit: 1,
+      },
+      response => {
+        if (response.didCancel) {
+          console.log('User cancelled video picker');
+        } else if (response.errorCode) {
+          console.log('ImagePicker Error: ', response.errorMessage);
+        } else {
+          const videoAsset = response.assets?.[0];
+          setVideo(videoAsset?.uri);
+        }
+      },
+    );
+  };
+
+  useEffect(() => {
+    if (selectedId === 1) {
+      pickVideo();
+    }
+  }, [selectedId]);
+
   return (
     <GestureHandlerRootView style={themedStyles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS == 'ios' ? 5 : 0}
-        style={{flex: 1}}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 5 : 0}
+        style={themedStyles.keyboardAvoidingView}
         enabled>
         <View style={themedStyles.container}>
           <Header />
@@ -193,18 +309,36 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
             </View>
           ) : (
             <ScrollView style={themedStyles.scrollView}>
-              <FirstCarousel
-                images={result}
-                setSelectedImage={setSelectedImage}
-                flatListRef={flatListRef}
-              />
+              {resultVideo && result == null ? (
+                <FirstCarouselVideo
+                  video={resultVideo}
+                  setSelectedVideo={setSelectedVideo}
+                  flatListRef={flatListRef}
+                />
+              ) : (
+                <FirstCarousel
+                  images={result}
+                  setSelectedImage={setSelectedImage}
+                  flatListRef={flatListRef}
+                />
+              )}
 
               {/* Image Display Section */}
               <View>
-                <Image
-                  source={{uri: selectedImage}}
-                  style={themedStyles.selectedImage}
-                />
+                {selectedVideo && !selectedImage ? (
+                  <Video
+                    ref={videoRef}
+                    source={{uri: selectedVideo}}
+                    style={themedStyles.selectedImage}
+                    controls={true}
+                  />
+                ) : (
+                  <Image
+                    source={{uri: selectedImage}}
+                    style={themedStyles.selectedImage}
+                  />
+                )}
+
                 <View style={themedStyles.iconContainer}>
                   <View style={themedStyles.iconWrapper}>
                     <Image
@@ -268,7 +402,39 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
                 </TouchableOpacity>
               )}
 
-              <OptionList data={optionImages} />
+              {video ? (
+                <View>
+                  <View style={themedStyles.close}>
+                    <AntDesign
+                      name="closecircle"
+                      size={24}
+                      onPress={() => {
+                        setVideo('');
+                        setSelectedVideo('');
+                      }}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedImage('');
+                      setSelectedVideo(video);
+                    }}>
+                    <Video
+                      source={{uri: video}}
+                      resizeMode="cover"
+                      style={themedStyles.video}
+                    />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <OptionList
+                  data={selectedId === 8 ? videoArray : optionImages}
+                  type={selectedId === 8 ? 'video' : 'image'}
+                  setSelectedVideo={setSelectedVideo}
+                  setSelectedImage={setSelectedImage}
+                  onPress={selectedId === 8 ? handleRemoveBackground : undefined}
+                />
+              )}
               <MenuOptionsList
                 options={menuOptions}
                 selectedId={selectedId}
@@ -277,14 +443,13 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
             </ScrollView>
           )}
         </View>
-
         {/* Bottom Sheets */}
         {selectedId === 2 && (
           <CommonBottomSheet
             ref={bottomSheetRefs.reStyle}
             title="Room ReStyle"
             subtitle="Pick a Style to Transfer"
-            data={FaceArray}
+            data={RoomArray}
             headerData={ReStyleOption}
             loading={loadingRestyle}
             onClose={() => closeBottomSheet(bottomSheetRefs.reStyle)}
@@ -301,7 +466,7 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
                     setSelectedSpace(item.spaceName);
                   }}>
                   <Image
-                    source={item?.path}
+                    source={{uri: item?.path}}
                     style={[
                       themedStyles.imageStyle,
                       isSelected && themedStyles.selectedBorder,
@@ -353,10 +518,24 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
             data={FaceArray}
             headerData={faceHeaderOption}
             onClose={() => closeBottomSheet(bottomSheetRefs.face)}
+            onPress={() => handleFaceSwap()}
+            loading={loadingFace}
             renderItemContent={item => {
+              const isSelected = selectedFaceId === item?.id;
               return (
-                <TouchableOpacity style={themedStyles.imageView}>
-                  <Image source={item?.path} style={themedStyles.imageStyle} />
+                <TouchableOpacity
+                  style={themedStyles.imageView}
+                  onPress={() => {
+                    setSelectedFace(item.path.toString());
+                    setSelectedFaceId(item.id);
+                  }}>
+                  <Image
+                    source={{uri: item?.path}}
+                    style={[
+                      themedStyles.imageStyle,
+                      isSelected && themedStyles.selectedBorder,
+                    ]}
+                  />
                 </TouchableOpacity>
               );
             }}
@@ -368,6 +547,39 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
           <QualityBottomSheet
             bottomSheetRef={bottomSheetRefs.quality}
             onSelectQuality={handleQualitySelect}
+          />
+        )}
+
+        {selectedId === 7 && (
+          <CommonBottomSheet
+            ref={bottomSheetRefs.photo}
+            title="3D Photo"
+            subtitle="Pick a Photo to Transfer"
+            data={threeDPhoto}
+            headerData={ReStyleOption}
+            loading={loadingPhoto}
+            onClose={() => closeBottomSheet(bottomSheetRefs.photo)}
+            onPress={() => handleThreeDPhoto()}
+            renderItemContent={item => {
+              const isSelected = selectedPhotoId === item?.id;
+              return (
+                <TouchableOpacity
+                  style={[themedStyles.imageView]}
+                  onPress={() => {
+                    setSelectedPhoto(item.path.toString());
+                    setSelectedPhotoId(item.id);
+                  }}>
+                  <Image
+                    source={{uri: item?.path}}
+                    style={[
+                      themedStyles.imageStyle,
+                      isSelected && themedStyles.selectedBorder,
+                    ]}
+                  />
+                </TouchableOpacity>
+              );
+            }}
+            theme={theme}
           />
         )}
 

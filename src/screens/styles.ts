@@ -12,6 +12,7 @@ export const styles = (theme: any) =>
       flex: 1,
       backgroundColor: 'white',
     },
+    keyboardAvoidingView: {flex: 1},
     scrollView: {
       marginTop: 20,
     },
@@ -38,12 +39,10 @@ export const styles = (theme: any) =>
       justifyContent: 'center',
     },
     textInputView: {
-      // marginHorizontal: 20,
       paddingVertical: 5,
       paddingHorizontal: 15,
       flexDirection: 'row',
       alignItems: 'center',
-      // backgroundColor: 'rgb(255, 255, 255)'
     },
     editText: {
       color: 'white',
@@ -171,5 +170,16 @@ export const styles = (theme: any) =>
       borderColor: '#000000', // or theme.primary, whatever suits your theme
       borderRadius: 10,
       width: ITEM_SIZE + 2,
+    },
+    video: {
+      height: 100,
+      width: 170,
+      margin: 5,
+      borderRadius: 5,
+    },
+    close: {
+      position: 'absolute',
+      left: 160,
+      zIndex: 1,
     },
   });
